@@ -99,7 +99,7 @@ module Spawn
       end
     end
     # clean up connections from expired threads
-    ActiveRecord::Base.verify_active_connections!()
+    ActiveRecord::Base.verify_active_connections!() if defined? ActiveRecord
   end
   
   class SpawnId
@@ -132,7 +132,7 @@ module Spawn
         # get a new connection so the parent can keep the original one
         # Old spawn did a bunch of hacks inside activerecord here. There is
         # most likely a reason that this won't work, but I am dumb.
-        ActiveRecord::Base.connection.reconnect!
+        ActiveRecord::Base.connection.reconnect! if defined? ActiveRecord
         
         # set the process name
         $0 = options[:argv] if options[:argv]
@@ -145,7 +145,7 @@ module Spawn
       ensure
         begin
           # to be safe, catch errors on closing the connnections too
-          ActiveRecord::Base.connection_handler.clear_all_connections!
+          ActiveRecord::Base.connection_handler.clear_all_connections! if defined? ActiveRecord
         ensure
           @@logger.info "spawn> child[#{Process.pid}] took #{Time.now - start} sec"
           # ensure log is flushed since we are using exit!
@@ -175,7 +175,7 @@ module Spawn
 
   def thread_it(options)
     # clean up stale connections from previous threads
-    ActiveRecord::Base.verify_active_connections!()
+    ActiveRecord::Base.verify_active_connections!() if defined? ActiveRecord
     thr = Thread.new do
       # run the long-running code block
       yield
@@ -184,8 +184,3 @@ module Spawn
     return SpawnId.new(:thread, thr)
   end
 end
-
-
-ActiveRecord::Base.send :include, Spawn
-ActionController::Base.send :include, Spawn
-ActiveRecord::Observer.send :include, Spawn
