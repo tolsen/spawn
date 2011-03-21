@@ -98,8 +98,7 @@ module Spawn
         end
       end
     end
-    # clean up connections from expired threads
-    ActiveRecord::Base.verify_active_connections!() if defined? ActiveRecord
+    cleanup
   end
   
   class SpawnId
@@ -129,11 +128,7 @@ module Spawn
 
         # disconnect from the listening socket, et al
         Spawn.close_resources
-        # get a new connection so the parent can keep the original one
-        # Old spawn did a bunch of hacks inside activerecord here. There is
-        # most likely a reason that this won't work, but I am dumb.
-        ActiveRecord::Base.connection.reconnect! if defined? ActiveRecord
-        
+        reconnect
         # set the process name
         $0 = options[:argv] if options[:argv]
 
@@ -145,7 +140,7 @@ module Spawn
       ensure
         begin
           # to be safe, catch errors on closing the connnections too
-          ActiveRecord::Base.connection_handler.clear_all_connections! if defined? ActiveRecord
+          disconnect
         ensure
           @@logger.info "spawn> child[#{Process.pid}] took #{Time.now - start} sec"
           # ensure log is flushed since we are using exit!
@@ -174,13 +169,31 @@ module Spawn
   end
 
   def thread_it(options)
-    # clean up stale connections from previous threads
-    ActiveRecord::Base.verify_active_connections!() if defined? ActiveRecord
+    cleanup
     thr = Thread.new do
       # run the long-running code block
       yield
     end
     thr.priority = -options[:nice] if options[:nice]
     return SpawnId.new(:thread, thr)
+  end
+
+  def cleanup
+    # clean up connections from expired/previous threads
+    ActiveRecord::Base.verify_active_connections!() if defined? ActiveRecord
+  end
+
+  def reconnect
+    # get a new connection so the parent can keep the original one
+    # Old spawn did a bunch of hacks inside activerecord here. There is
+    # most likely a reason that this won't work, but I am dumb.
+    ActiveRecord::Base.connection.reconnect! if defined? ActiveRecord
+    # Connect to Mongodb if Mongoid is in use
+    Mongoid.database.connection.connect if defined? Mongoid
+  end
+
+  def disconnect    
+    ActiveRecord::Base.connection_handler.clear_all_connections! if defined? ActiveRecord
+    Mongoid.database.connection.close if defined? Mongoid
   end
 end
