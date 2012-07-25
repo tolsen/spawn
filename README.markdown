@@ -51,6 +51,8 @@ spawn to Spawn::wait(), like this:
     # wait for all N blocks of code to finish running
     wait(spawn_ids)
 
+If available, [Airbrake](https://github.com/airbrake/airbrake/) will be notified of any errors.
+
 ## Options
 
 The options you can pass to spawn_block are:

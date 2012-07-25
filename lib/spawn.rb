@@ -137,6 +137,7 @@ module Spawn
 
       rescue => ex
         @@logger.error "spawn> Exception in child[#{Process.pid}] - #{ex.class}: #{ex.message}"
+        handle_exception(ex)
       ensure
         begin
           # to be safe, catch errors on closing the connnections too
@@ -171,8 +172,14 @@ module Spawn
   def thread_it(options)
     cleanup
     thr = Thread.new do
-      # run the long-running code block
-      yield
+      begin
+        # run the long-running code block
+        yield
+      rescue => ex
+        handle_exception(ex)
+        # raises the original exception to kill the thread
+        raise
+      end
     end
     thr.priority = -options[:nice] if options[:nice]
     return SpawnId.new(:thread, thr)
@@ -181,6 +188,15 @@ module Spawn
   def cleanup
     # clean up connections from expired/previous threads
     ActiveRecord::Base.verify_active_connections!() if defined? ActiveRecord
+  end
+
+  def handle_exception(ex)
+    if defined? notify_airbrake
+      # within a Rails Controller
+      notify_airbrake(ex)
+    elsif defined? Airbrake
+      Airbrake.notify_or_ignore(ex)
+    end
   end
 
   def reconnect
