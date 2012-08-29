@@ -199,17 +199,22 @@ module Spawn
     end
   end
 
+  def mongoid_connection_handling_required?
+    @@mongoid_connection_handling_required ||=
+      (defined?(Mongoid) && Mongoid::VERSION.match(/^(\d+)\./)[1].to_i < 3)
+  end
+
   def reconnect
     # get a new connection so the parent can keep the original one
     # Old spawn did a bunch of hacks inside activerecord here. There is
     # most likely a reason that this won't work, but I am dumb.
     ActiveRecord::Base.connection.reconnect! if defined? ActiveRecord
     # Connect to Mongodb if Mongoid is in use
-    Mongoid.database.connection.connect if defined? Mongoid
+    Mongoid.database.connection.connect if mongoid_connection_handling_required?
   end
 
   def disconnect    
     ActiveRecord::Base.connection_handler.clear_all_connections! if defined? ActiveRecord
-    Mongoid.database.connection.close if defined? Mongoid
+    Mongoid.database.connection.close if mongoid_connection_handling_required?
   end
 end
